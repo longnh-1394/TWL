@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Title</title>
+    <meta charset="utf-8">
+    <style>
+      @import url(https://fonts.googleapis.com/css?family=Yanone+Kaffeesatz);
+      @import url(https://fonts.googleapis.com/css?family=Droid+Serif:400,700,400italic);
+      @import url(https://fonts.googleapis.com/css?family=Ubuntu+Mono:400,700,400italic);
+
+      body { font-family: 'Droid Serif'; }
+      h1, h2, h3 {
+        font-family: 'Yanone Kaffeesatz';
+        font-weight: normal;
+      }
+      .remark-code, .remark-inline-code { font-family: 'Ubuntu Mono'; }
+    </style>
+  </head>
+  <body>
+    <textarea id="source">
+
+class: center, middle
+
+# Tìm hiểu về create step form
+---
+# Giới thiệu về form step
+- Loại Form thông thường:
+![](https://freetuts.net/upload/tut_post/images/2017/08/08/990/huong-dan-tao-contact-form-don-gian-voi-css.jpg)
+---
+- Form có quá nhiều thông tin
+![](https://blog.formkeep.com/wp-content/uploads/2016/05/longform.jpg)
+---
+# Giới thiệu về form-step
+- Form step:
+![](https://raw.githubusercontent.com/longnh-1394/longnh1394.github.io/master/3a1d5da8f3bc1455ec8d1084cd598e2e.png)
+---
+
+# Yêu cầu bài toán
+- Xây dựng một form đăng ký users có 3 step.
+- Mỗi step đều đảm bảo có validate dữ liệu.
+- Phải đảm bảo cấu trúc code được tổ chức clear, dễ sử dụng.
+
+![](https://raw.githubusercontent.com/longnh-1394/longnh1394.github.io/master/03a79aa8-6401-4346-ydc2-bc9647befa38.gif)
+---
+
+# Giải quyết bài toán
+- Hướng xử lý bằng Gem Wicked:
+  - Ý tưởng là tạo 1 bản ghi trống và update bản ghi đó theo step.
+  - Chỉ cần tạo 1 controller và config các step trong controller đó.
+- Nhược điểm:
+  - Nếu có nhiều xử lý logic ở mỗi step thì controller sẽ bị phình to ra, do chỉ có 1 controller quản lý step.
+- Có thế tham khảo chi tiết ở đây:
+  - https://github.com/trungtq-0433/TWL/blob/299ec0978f05f046f69ca17c806cb2c030bcae2c/Form%20step/T%C3%ACm%20hi%E1%BB%83u%20v%E1%BB%81%20form-step%20wicked.pptx
+  - https://github.com/zombocom/wicked
+---
+# Giải quyết bài toán
+- Hướng Manual:
+  - Ý tưởng là tạo 1 bản ghi trống và update bản ghi đó theo step.
+  - Mỗi step sẽ có 1 controller riêng để xử lý logic + lưu dữ liệu.
+
+  => Cách làm này phù hợp với bài toán xử lý nhiều logic.
+- Nhược điểm:
+  - Sẽ phải tạo nhiều file hơn so vs wicked.
+---
+# Chuẩn bị
+- Database:
+```ruby
+rails g model User email:string passsword:string first_name:string last_name:string address:string phone:string
+```
+![](https://raw.githubusercontent.com/longnh-1394/longnh1394.github.io/master/sch.png)
+---
+- Routes
+  ```ruby
+    Rails.application.routes.draw do
+      namespace :register do
+        namespace :step1 do
+          resources :users, except: [:index, :destroy]
+        end
+        namespace :step2 do
+          resources :users, only: [:edit, :update]
+        end
+        namespace :step3 do
+          resources :users, only: [:edit, :update]
+        end
+      end
+    end
+  ```
+    **) Ở step 1 sẽ có bước tạo mới 1 record trống để các step sau chỉ cần update bản ghi đó thôi.
+      => cần phải có function new, create trong controller.
+
+  vd: /register/step_1/users/new
+
+---
+# Phân tích Controller(step 1)
+  ![](https://raw.githubusercontent.com/longnh-1394/longnh1394.github.io/master/controller.png)"#step1Controller"
+```ruby
+    #step1/user_controller.rb
+    def new
+      @user = User.new
+    end
+
+    def create
+      @user = User.new(user_params)
+
+      if @user.save context: :step1
+        redirect_to edit_register_step2_user_path(@user)
+      else
+        render :new
+      end
+    end
+```
+- Khi người dùng nhập thông tin của step1 vào và submit thì sẽ tạo 1 bản ghi mới chứa thông tin step 1 và điều hướng tới step2Controller.
+---
+# Phân tích Controller(step 2,....)
+- Công việc của các controller step về sau chỉ đơn giản là update lại bản ghi đã tạo.
+```ruby
+    def edit; end
+
+    def update
+      @user.assign_attributes(user_params)
+
+      if @user.save context: :step2
+        redirect_to edit_register_step3_user_path(@user)
+      else
+        render :edit
+      end
+    end
+```
+**) Nhớ sử dụng strong params trong các stepController để đảm bảo tính bảo mật
+```ruby
+    private
+    def user_params
+      params.require(:user).permit(:email, :passsword)
+    end
+```
+---
+Cấu trúc thư mục view:
+
+![](https://raw.githubusercontent.com/longnh-1394/longnh1394.github.io/master/view.png)
+
+```ruby
+<%= form_for [:register, :step2, @user] do |form| %>
+  <div class="field">
+    <%= form.label :first_name %>
+    <%= form.text_field :first_name, id: :user_first_name %>
+  </div>
+  <div class="field">
+    <%= form.label :last_name %>
+    <%= form.text_field :last_name, id: :user_last_name %>
+  </div>
+  <div class="actions">
+    <%= link_to  "back", edit_register_step1_user_path(@user) %>
+    <%= form.submit "Next Step" %>
+  </div>
+<% end %>
+```
+---
+#Form view
+Nút back chỉ là đường dẫn về hàm edit của step trước.
+```ruby
+<%= link_to  "back", edit_register_step1_user_path(@user) %>
+```
+![](https://raw.githubusercontent.com/longnh-1394/longnh1394.github.io/master/back.png)
+---
+# Sử dụng context để validate trong form-step
+- Khi save ở controller ta truyền context (bối cảnh) vào để bên model có thể phân biệt được step nào để validate
+```ruby
+  class User < ApplicationRecord
+      validates :email, :passsword, presence: true, on: :step1
+      validates :first_name, :last_name, presence: true, on: :step2
+  end
+```
+Trường hợp có nhiều validate trong 1 context thì nên viết như bên dưới:
+```ruby
+with_options on: %i[step1] do
+      validates :email, :passsword, presence: true
+      validates :passsword, length: {minimum: 8}
+end
+```
+---
+# Sử dụng uuid để tăng tính bảo mật
+Nếu sử dụng id tự tăng(1, 2, 3,...) thì các user khác có thể dễ dàng mò ra thông tin của user trên url.
+
+-> Điều này là không nên. Chúng ta nên sinh ra uuid (vd: 2f883affed71418) thay vì find bản ghi bằng id thì sẽ find bằng uuid. Như vậy sẽ tăng tính bảo mật hơn.
+
+Hiểu rõ hơn về uuid: https://kipalog.com/posts/UUID-cho-cach-mang-4-0
+- Cách Thực hiện
+
+Thêm trường uuid vào db
+```ruby
+  rails g migration addUuidToUsers uuid:string
+```
+---
+# Thực hiện dùng uuid
+Trong controller:
+
+Thay vì find theo id thì chúng ta sẽ thay đổi find theo uuid
+
+```ruby
+#/controllers/register/step1/users_controller.rb
+def set_user
+  @user = User.find_by uuid: params[:id]
+end
+
+def user_params
+  uuid = SecureRandom.uuid.delete("-")
+  params.require(:user).permit(:email, :passsword).merge(uuid: uuid)
+end
+```
+Điều hướng ở các function cũng cần phải đổi lại:
+```ruby
+redirect_to edit_register_step2_user_path(@user.uuid)
+```
+---
+# Thực hiện dùng uuid
+Tại view:
+- Chúng ta cần dùng url mặc định của form để có thể truyền được uuid.
+```ruby
+<%= form_for @user, url: register_step2_user_path(@user.uuid) do |form| %>
+...
+<% end %>
+```
+*) Vì ở step 1 dùng chung file partial _form.html.erb để  create, update nên cần truyền tham số url tương ứng vào file.
+
+  ```ruby
+  /views/register/step1/users/_form.html.erb
+  <%= form_for @user, url: url do |form| %>
+  ...
+  <% end %>
+
+  /views/register/step1/users/edit.html.erb
+  <%= render 'form', user: @user, url: register_step1_user_path(@user.uuid) %>
+
+  /views/register/step1/users/edit.html.erb
+  <%= render 'form', user: @user, url: register_step1_users_path(@user.uuid) %>
+  ```
+Kết quả:
+![](https://raw.githubusercontent.com/longnh-1394/longnh1394.github.io/master/uuid.png)
+---
+#Kết quả buổi chia sẻ
+Github: https://github.com/longnguyen28596/rails-step-form-manual
+
+![](https://raw.githubusercontent.com/longnh-1394/longnh1394.github.io/master/03a79aa8-6401-4346-ydc2-bc9647befa38.gif)
+
+    </textarea>
+    <script src="https://remarkjs.com/downloads/remark-latest.min.js">
+    </script>
+    <script>
+      var slideshow = remark.create();
+    </script>
+  </body>
+</html>
